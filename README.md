@@ -1,3 +1,50 @@
+# Tennis Scout
+
+A real-time tennis match tracking application built with React and Firebase.
+
+## Features
+
+- Create and manage multiple tennis matches
+- Track match scores, points, and statistics in real-time
+- Record serve directions, formations, and tactics
+- View tactical summaries and match history
+- Real-time data synchronization across devices
+
+## Setup
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Create a Firebase project and update the configuration in `src/firebase.js`
+4. Start the development server:
+   ```bash
+   npm start
+   ```
+
+## Deployment
+
+This project is configured for deployment on Vercel. To deploy:
+
+1. Push your code to a GitHub repository
+2. Connect your repository to Vercel
+3. Vercel will automatically detect the React app and deploy it
+
+## Environment Variables
+
+The following environment variables are required:
+
+- `REACT_APP_FIREBASE_API_KEY`
+- `REACT_APP_FIREBASE_AUTH_DOMAIN`
+- `REACT_APP_FIREBASE_PROJECT_ID`
+- `REACT_APP_FIREBASE_STORAGE_BUCKET`
+- `REACT_APP_FIREBASE_MESSAGING_SENDER_ID`
+- `REACT_APP_FIREBASE_APP_ID`
+- `REACT_APP_FIREBASE_MEASUREMENT_ID`
+
+These should be set in your Vercel project settings.
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
