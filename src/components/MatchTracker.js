@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button, ButtonGroup, Card, Container, Row, Col, Form, Alert, Modal } from 'react-bootstrap';
 import { db } from '../firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 
 const MatchTracker = () => {
   const navigate = useNavigate();
@@ -13,46 +13,46 @@ const MatchTracker = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Memoize the match ID to prevent unnecessary re-renders
+  const matchId = useMemo(() => 
+    location.state?.matchId || localStorage.getItem('currentMatchId'),
+    [location.state]
+  );
+
+  // Use onSnapshot for real-time updates instead of getDoc
   useEffect(() => {
-    const fetchMatch = async () => {
-      setLoading(true);
-      setError(null);
-      
-      try {
-        // Get matchId from location state or localStorage
-        const matchId = location.state?.matchId || localStorage.getItem('currentMatchId');
-        
-        if (!matchId) {
-          setError('No match selected');
-          setLoading(false);
-          return;
-        }
+    if (!matchId) {
+      setError('No match selected');
+      setLoading(false);
+      return;
+    }
 
-        setCurrentMatchId(matchId);
-        
-        // Fetch match data from Firestore
-        const matchRef = doc(db, 'matches', matchId);
-        const matchDoc = await getDoc(matchRef);
-        
-        if (!matchDoc.exists()) {
+    setCurrentMatchId(matchId);
+    setLoading(true);
+    setError(null);
+
+    const unsubscribe = onSnapshot(
+      doc(db, 'matches', matchId),
+      (doc) => {
+        if (doc.exists()) {
+          setMatchData({ id: doc.id, ...doc.data() });
+        } else {
           setError('Match not found');
-          setLoading(false);
-          return;
         }
-
-        setMatchData({ id: matchDoc.id, ...matchDoc.data() });
-      } catch (error) {
+        setLoading(false);
+      },
+      (error) => {
         console.error('Error fetching match:', error);
         setError('Error loading match data. Please try again.');
-      } finally {
         setLoading(false);
       }
-    };
+    );
 
-    fetchMatch();
-  }, [location.state]);
+    return () => unsubscribe();
+  }, [matchId]);
 
-  const updateMatchInFirebase = async (updatedData) => {
+  // Memoize updateMatchInFirebase to prevent unnecessary re-renders
+  const updateMatchInFirebase = useCallback(async (updatedData) => {
     if (!currentMatchId) return;
     try {
       await updateDoc(doc(db, 'matches', currentMatchId), updatedData);
@@ -60,9 +60,10 @@ const MatchTracker = () => {
       console.error('Error updating match:', error);
       alert('Error saving match data. Please try again.');
     }
-  };
+  }, [currentMatchId]);
 
-  const handleTeamNameChange = (team, value) => {
+  // Memoize handlers to prevent unnecessary re-renders
+  const handleTeamNameChange = useCallback((team, value) => {
     if (!matchData) return;
     const updatedData = {
       ...matchData,
@@ -70,9 +71,9 @@ const MatchTracker = () => {
     };
     setMatchData(updatedData);
     updateMatchInFirebase(updatedData);
-  };
+  }, [matchData, updateMatchInFirebase]);
 
-  const handlePlayerNameChange = (team, index, value) => {
+  const handlePlayerNameChange = useCallback((team, index, value) => {
     if (!matchData) return;
     const updatedData = {
       ...matchData,
@@ -85,7 +86,7 @@ const MatchTracker = () => {
     };
     setMatchData(updatedData);
     updateMatchInFirebase(updatedData);
-  };
+  }, [matchData, updateMatchInFirebase]);
 
   const getPointScore = (points) => {
     switch (points) {
@@ -278,6 +279,14 @@ const MatchTracker = () => {
     }
   };
 
+  // Memoize the score display
+  const scoreDisplay = useMemo(() => {
+    if (!matchData) return '';
+    const { score, currentGame } = matchData;
+    const pointScore = `${getPointScore(currentGame.team1)}-${getPointScore(currentGame.team2)}`;
+    return `${score.team1.sets}-${score.team2.sets} | ${score.team1.games}-${score.team2.games} | ${pointScore}`;
+  }, [matchData]);
+
   const getScore = () => {
     if (!matchData) return '';
     const { score, currentGame } = matchData;
@@ -409,7 +418,7 @@ const MatchTracker = () => {
           </Row>
 
           <Alert variant="info" className="text-center mb-4">
-            <div className="h4">Current Score: {getScore()}</div>
+            <div className="h4">Current Score: {scoreDisplay}</div>
             <div className="small">Serving: {getCurrentServer()}</div>
             <div className="small">Receiving: {getCurrentReceiver()}</div>
           </Alert>
@@ -783,4 +792,4 @@ const MatchTracker = () => {
   );
 };
 
-export default MatchTracker; 
+export default React.memo(MatchTracker); 

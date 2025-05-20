@@ -1,39 +1,96 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Container, Button, Table, Row, Col, Alert } from 'react-bootstrap';
 import { db } from '../firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 
 const SummaryScreen = () => {
   const navigate = useNavigate();
   const [matches, setMatches] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchMatches = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, 'matches'));
-        const matchesList = querySnapshot.docs.map(doc => ({
+    setLoading(true);
+    setError(null);
+
+    const unsubscribe = onSnapshot(
+      collection(db, 'matches'),
+      (snapshot) => {
+        const matchesList = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
         setMatches(matchesList);
-      } catch (error) {
+        setLoading(false);
+      },
+      (error) => {
         console.error('Error fetching matches:', error);
-        alert('Error loading match data. Please try again.');
+        setError('Error loading matches. Please try again.');
+        setLoading(false);
       }
-    };
-    fetchMatches();
+    );
+
+    return () => unsubscribe();
   }, []);
 
-  if (matches.length === 0) {
+  // Memoize the matches table
+  const matchesTable = useMemo(() => (
+    <Table striped bordered hover responsive>
+      <thead>
+        <tr>
+          <th>Court</th>
+          <th>Teams</th>
+          <th>Score</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {matches.map(match => (
+          <tr key={match.id}>
+            <td>{match.court}</td>
+            <td>
+              {match.team1.name} vs {match.team2.name}
+            </td>
+            <td>
+              {match.score.team1.sets}-{match.score.team2.sets} | 
+              {match.score.team1.games}-{match.score.team2.games}
+            </td>
+            <td>
+              <Button
+                variant="primary"
+                size="sm"
+                className="me-2"
+                onClick={() => navigate('/match', { state: { matchId: match.id } })}
+              >
+                View Match
+              </Button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  ), [matches, navigate]);
+
+  if (loading) {
     return (
       <Container className="py-4">
         <Card>
           <Card.Body className="text-center">
-            <h2>No Match Data Available</h2>
-            <Button variant="primary" onClick={() => navigate('/')} className="mt-3">
-              Start New Match
-            </Button>
+            <h2>Loading Matches...</h2>
+          </Card.Body>
+        </Card>
+      </Container>
+    );
+  }
+
+  if (error) {
+    return (
+      <Container className="py-4">
+        <Card>
+          <Card.Body className="text-center">
+            <h2>Error</h2>
+            <p className="text-danger">{error}</p>
           </Card.Body>
         </Card>
       </Container>
@@ -240,45 +297,6 @@ const SummaryScreen = () => {
     if (stats.total === 0) return '0%';
     const successfulServes = stats.aces + stats.returnErrors;
     return `${Math.round((successfulServes / stats.total) * 100)}%`;
-  };
-
-  const renderMatchList = () => {
-    return (
-      <div className="mb-4">
-        <h4>Active Matches</h4>
-        <Row>
-          {matches.map(match => (
-            <Col md={4} key={match.id} className="mb-3">
-              <Card>
-                <Card.Body>
-                  <h5>Court {match.court}</h5>
-                  <p className="mb-2">
-                    {match.team1.name} vs {match.team2.name}
-                  </p>
-                  <p className="mb-2 small">
-                    Score: {match.score.team1.sets}-{match.score.team2.sets} | 
-                    {match.score.team1.games}-{match.score.team2.games}
-                  </p>
-                  <p className="mb-2 small">
-                    Points Recorded: {match.points.length}
-                  </p>
-                  <Button 
-                    variant="primary" 
-                    onClick={() => {
-                      localStorage.setItem('currentMatchId', match.id);
-                      navigate('/match');
-                    }}
-                    className="w-100"
-                  >
-                    Continue Match
-                  </Button>
-                </Card.Body>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-      </div>
-    );
   };
 
   const renderOverallStats = () => {
@@ -561,20 +579,19 @@ const SummaryScreen = () => {
     <Container className="py-4">
       <Card>
         <Card.Body>
-          <h2 className="text-center mb-4">Tactical Summary</h2>
-          
-          {renderMatchList()}
-          {renderOverallStats()}
-
-          <div className="mt-4">
-            <Button variant="primary" onClick={() => navigate('/')} className="w-100">
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <h2>Match Summary</h2>
+            <Button variant="primary" onClick={() => navigate('/')}>
               Back to Match Selection
             </Button>
           </div>
+
+          {matchesTable}
+          {renderOverallStats()}
         </Card.Body>
       </Card>
     </Container>
   );
 };
 
-export default SummaryScreen; 
+export default React.memo(SummaryScreen); 
